@@ -13,7 +13,7 @@ Do this before you touch a single question. I lost marks on my first practice ex
 ```bash
 alias k='kubectl'
 alias kn='kubectl config set-context --current --namespace'
-export do='--dry-run=client -o yaml'    # this saves you on every create question
+export do=(--dry-run=client -o yaml)    # this saves you on every create question
 export now='--force --grace-period=0'    # instant delete, no waiting 30s
 source <(kubectl completion bash)
 complete -o default -F __start_kubectl k
@@ -41,11 +41,11 @@ k config current-context           # Verify
 ## Create Resources Fast
 
 ```bash
-k run pod1 --image=nginx:1.27 $do > pod.yaml
-k create deployment dep1 --image=nginx:1.27 --replicas=3 $do > dep.yaml
-k expose deployment dep1 --port=80 --target-port=80 $do > svc.yaml
-k create job job1 --image=busybox:1.36 -- sh -c "echo done" $do > job.yaml
-k create cronjob cron1 --image=busybox:1.36 --schedule="*/5 * * * *" -- date $do > cron.yaml
+k run pod1 --image=nginx:1.27 "${do[@]}" > pod.yaml
+k create deployment dep1 --image=nginx:1.27 --replicas=3 "${do[@]}" > dep.yaml
+k expose deployment dep1 --port=80 --target-port=80 "${do[@]}" > svc.yaml
+k create job job1 --image=busybox:1.36 -- sh -c "echo done" "${do[@]}" > job.yaml
+k create cronjob cron1 --image=busybox:1.36 --schedule="*/5 * * * *" -- date "${do[@]}" > cron.yaml
 k create cm my-cm --from-literal=KEY=value
 k create secret generic my-sec --from-literal=PASS=secret
 k create sa my-sa -n <ns>
