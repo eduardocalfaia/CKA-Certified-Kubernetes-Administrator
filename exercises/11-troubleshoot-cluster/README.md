@@ -1,8 +1,22 @@
 # Exercise 11 — Troubleshoot Cluster Components
 
-> Related: [README — Troubleshooting](../../README.md#domain-2--troubleshooting-30)
+> Related: [README — Troubleshooting](../../README.md#domain-2--troubleshooting-30) | **Updated May 2026**
 
 Fix a broken cluster. This exercise simulates common failures you'll see on the CKA: kubelet down, kube-proxy misconfigured, CoreDNS not resolving.
+
+## Conventions
+
+Before working through these scenarios, understand the trap architecture:
+
+- **Primary Trap:** A legitimate cluster misconfiguration that breaks functionality (e.g., kubelet service stopped)
+- **Secondary Trap (Gotcha):** A realistic red herring that makes diagnosis harder (e.g., checking wrong `kubeconfig` context, nodes showing status from wrong cluster)
+- **Validation Criteria:** Your answer is correct if:
+  - The cluster component is running and healthy
+  - All nodes return to `Ready` or services return to running state
+  - Subsequent `kubectl` commands work without errors
+  - You've identified the root cause, not just the symptom
+
+**Scoring:** Full credit for fixing the issue + explaining the root cause. Partial credit for fixing without explanation.
 
 ## Tasks
 
@@ -56,11 +70,17 @@ Fix a broken cluster. This exercise simulates common failures you'll see on the 
 
 ## What tripped me up
 
-> My first instinct when a node is NotReady was to run `kubectl describe node` from the control plane. That gives you conditions but not the root cause. The real answer is almost always in `journalctl -u kubelet` on the broken node itself. SSH first, check kubelet logs, then work backwards. I wasted 7 minutes on practice exam questions by troubleshooting from the wrong machine.
+> **Kubelet Trap:** My first instinct when a node is NotReady was to run `kubectl describe node` from the control plane. That gives you conditions but not the root cause. The real answer is almost always in `journalctl -u kubelet` on the broken node itself. SSH first, check kubelet logs, then work backwards. I wasted 7 minutes on practice exam questions by troubleshooting from the wrong machine.
 >
-> For CoreDNS: `nslookup` failing doesn't always mean CoreDNS is broken. Check `resolv.conf` inside the pod first — I had a case where the pod's DNS config was pointing to the wrong IP because of a network policy blocking UDP 53 to the kube-dns service. The CoreDNS pods were fine; the traffic just couldn't reach them.
+> **Kubelet Gotcha (Red Herring):** In k8s 1.35, the systemd service is `kubelet`, but the process might have a different PID if running in a container. Don't assume `ps aux | grep kubelet` shows the main process. Always use `systemctl status kubelet` for authoritative state.
 >
-> For audit logs: I initially searched `grep "error"` which gave me nothing useful. The audit log format is JSON — you need to grep for specific verb patterns like `grep "verb.*delete"` or look for status codes. Also, not all clusters enable audit logging, so check if the apiserver was even started with audit flags before spending time looking for logs that don't exist.
+> **CoreDNS Trap:** `nslookup` failing doesn't always mean CoreDNS is broken. Check `resolv.conf` inside the pod first — I had a case where the pod's DNS config was pointing to the wrong IP because of a network policy blocking UDP 53 to the kube-dns service. The CoreDNS pods were fine; the traffic just couldn't reach them. Verify: `k exec <pod> -- cat /etc/resolv.conf`
+>
+> **CoreDNS Gotcha (May 2026):** In k8s 1.35+, CoreDNS respects search domain order. If your test pod gets DNS timeout, check the search domains in `resolv.conf` — they're often set by the kubelet's `--cluster-domain` flag. A misconfigured search domain can cause subtle timeouts (too many attempted SRV records).
+>
+> **kube-proxy Trap:** Not all nodes have kube-proxy running. In some environments (e.g., kind, GKE with eBPF mode), kube-proxy may not exist. Check the actual cluster setup before assuming kube-proxy absence = failure. Always verify: `k get ds -n kube-system | grep proxy` or `k get pods -n kube-system -l k8s-app=kube-proxy`.
+>
+> **Audit Logs Gotcha:** I initially searched `grep "error"` which gave me nothing useful. The audit log format is JSON — you need to grep for specific verb patterns like `grep "verb.*delete"` or look for status codes. Also, not all clusters enable audit logging, so check if the apiserver was even started with audit flags before spending time looking for logs that don't exist. **May 2026 update:** Use `jq` if available: `cat /var/log/audit/audit.log | jq 'select(.user.username=="admin")' | jq '.verb'`
 
 ## Verify
 

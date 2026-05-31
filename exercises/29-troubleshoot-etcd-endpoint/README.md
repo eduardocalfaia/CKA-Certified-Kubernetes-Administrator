@@ -1,8 +1,20 @@
 # Exercise 29 — Troubleshoot Broken Cluster (Incorrect etcd Endpoint)
 
-> Related: [README — Cluster Maintenance](../../README.md#domain-7--cluster-maintenance-11)
+> Related: [README — Cluster Maintenance](../../README.md#domain-7--cluster-maintenance-11) | **Updated May 2026**
 
 Debug and fix a broken control plane where API server points to wrong etcd endpoint. Tests troubleshooting methodology and static pod modification.
+
+## Conventions
+
+Trap architecture for this exercise:
+
+- **Primary Trap:** API server misconfigured to point to wrong etcd endpoint (wrong IP, wrong port, or wrong protocol)
+- **Secondary Trap (Gotcha):** Static pod not restarting due to kubelet watching race condition, or multiple etcd instances running (one broken one working)
+- **Validation Criteria:** Your answer is correct if:
+  - API server pod transitions from `CrashLoopBackOff` to `Running` within 30 seconds
+  - `k get nodes` and `k get pods -A` execute successfully
+  - etcd connection string matches `/etc/kubernetes/manifests/etcd.yaml` exactly
+- **Scoring:** Full credit for fix + explanation of root cause. Partial for fix alone.
 
 ## Tasks
 
@@ -43,7 +55,15 @@ Debug and fix a broken control plane where API server points to wrong etcd endpo
 
 ## What tripped me up
 
-> I found the wrong IP in kube-apiserver but didn't think to verify the CORRECT IP by checking etcd.yaml. Edited to what I thought was right and it was still wrong. Always verify from source. Also, I tried to `kubectl apply` the manifest — that doesn't work for static pods. Must edit in place in `/etc/kubernetes/manifests/`. The kubelet watches that directory and auto-restarts pods when files change.
+> **Static Pod Trap:** I found the wrong IP in kube-apiserver but didn't think to verify the CORRECT IP by checking etcd.yaml. Edited to what I thought was right and it was still wrong. **Always verify from source.** The correct etcd endpoint is the source of truth — never guess.
+>
+> **Static Pod Gotcha:** I tried to `kubectl apply` the manifest — that doesn't work for static pods. Must edit in place in `/etc/kubernetes/manifests/`. The kubelet watches that directory and auto-restarts pods when files change. **May 2026 update:** kubelet file watching can have race conditions on very fast SSDs. If the pod doesn't restart within 10 seconds, try: `sudo systemctl restart kubelet` (on the control plane node only).
+>
+> **Certificate Gotcha (v1.35):** In k8s 1.35, etcd certificate validation is stricter. If switching etcd endpoints, verify both use the same certificate scheme (self-signed vs CA-signed). A mismatch causes `x509: certificate signed by unknown authority` errors. Check: `grep "client-cert-auth" /etc/kubernetes/manifests/etcd.yaml` must match the connection string security flags.
+>
+> **Port Gotcha:** etcd default is `2379` (client port), not `2384` (peer port). Common mistake: `--etcd-servers=https://127.0.0.1:2384` (peer port) instead of `2379`. Always verify in the etcd manifest: `grep "listen-client-urls" /etc/kubernetes/manifests/etcd.yaml`.
+>
+> **Hostname vs IP Trap:** Some clusters use etcd hostnames (e.g., `etcd-0`) instead of IPs. If the manifest says `--etcd-servers=https://etcd-0:2379` but the error says "name resolution failed", this is actually correct — DNS isn't working because the API server pod is broken. Don't try to change hostname to IP (that breaks HA clusters). Instead, fix the connection string format.
 
 ## Verify
 
